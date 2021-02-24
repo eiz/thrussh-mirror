@@ -555,8 +555,8 @@ where
                     Some((id, ChannelMsg::ExitSignal { signal_name, core_dumped, error_message, lang_tag })) => {
                         session.exit_signal_request(id, signal_name, core_dumped, &error_message, &lang_tag);
                     }
-                    Some((id, ChannelMsg::WindowAdjusted { new_size })) => {
-                        debug!("window adjusted to {:?} for channel {:?}", new_size, id);
+                    Some((id, ChannelMsg::WindowAdjusted { added_size })) => {
+                        debug!("window adjusted by {:?} for channel {:?}", added_size, id);
                     }
                     Some((id, ChannelMsg::Success)) => {
                         debug!("channel success {:?}", id);

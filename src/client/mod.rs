@@ -647,9 +647,9 @@ impl Channel {
             // wait for the window to be restored.
             while self.window_size == 0 {
                 match self.receiver.recv().await {
-                    Some(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { new_size })) => {
-                        debug!("window adjusted: {:?}", new_size);
-                        self.window_size = new_size;
+                    Some(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { added_size })) => {
+                        debug!("window adjusted: {:?}", added_size);
+                        self.window_size = added_size;
                         continue;
                     }
                     Some(OpenChannelMsg::Msg(msg)) => {
@@ -716,9 +716,9 @@ impl Channel {
     pub async fn wait(&mut self) -> Option<ChannelMsg> {
         loop {
             match self.receiver.recv().await {
-                Some(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { new_size })) => {
-                    self.window_size += new_size;
-                    return Some(ChannelMsg::WindowAdjusted { new_size });
+                Some(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { added_size })) => {
+                    self.window_size += added_size;
+                    return Some(ChannelMsg::WindowAdjusted { added_size });
                 }
                 Some(OpenChannelMsg::Msg(msg)) => return Some(msg),
                 None => return None,
@@ -1417,15 +1417,17 @@ pub trait Handler: Sized {
     fn window_adjusted(
         self,
         channel: ChannelId,
-        mut new_size: u32,
+        mut added_size: u32,
         mut session: Session,
     ) -> Self::FutureUnit {
         if let Some(ref mut enc) = session.common.encrypted {
-            new_size -= enc.flush_pending(channel) as u32;
+            added_size -= enc.flush_pending(channel) as u32;
         }
         if let Some(chan) = session.channels.get(&channel) {
-            chan.send(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { new_size }))
-                .unwrap_or(())
+            chan.send(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted {
+                added_size,
+            }))
+            .unwrap_or(())
         }
         self.finished(session)
     }

@@ -193,7 +193,7 @@ impl Encrypted {
                 match channel.pending_data.pop_front() {
                     Some(PendingData::Data(buf, a, size)) => {
                         let (buf, size_) = Self::data_noqueue(&mut self.write, channel, buf, size);
-                        pending_size += size_;
+                        pending_size += size_ - size;
                         if size_ < buf.len() {
                             channel
                                 .pending_data

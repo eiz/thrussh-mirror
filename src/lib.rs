@@ -639,7 +639,7 @@ pub enum ChannelMsg {
         lang_tag: String,
     },
     WindowAdjusted {
-        new_size: u32,
+        added_size: u32,
     },
     Success,
 }

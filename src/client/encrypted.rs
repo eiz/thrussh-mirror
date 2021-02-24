@@ -436,18 +436,16 @@ impl super::Session {
                 let mut r = buf.reader(1);
                 let channel_num = ChannelId(r.read_u32().map_err(crate::Error::from)?);
                 let amount = r.read_u32().map_err(crate::Error::from)?;
-                let mut new_value = 0;
                 debug!("amount: {:?}", amount);
                 if let Some(ref mut enc) = self.common.encrypted {
                     if let Some(ref mut channel) = enc.channels.get_mut(&channel_num) {
                         channel.recipient_window_size += amount;
-                        new_value = channel.recipient_window_size;
                     } else {
                         return Err(Error::WrongChannel.into());
                     }
                 }
                 let c = client.take().unwrap();
-                let (c, s) = c.window_adjusted(channel_num, new_value, self).await?;
+                let (c, s) = c.window_adjusted(channel_num, amount, self).await?;
                 *client = Some(c);
                 Ok(s)
             }
