@@ -594,6 +594,12 @@ impl ChannelOpenFailure {
 /// The identifier of a channel.
 pub struct ChannelId(u32);
 
+#[derive(Debug)]
+pub(crate) enum PendingData {
+    Data(CryptoVec, Option<u32>, usize),
+    Eof,
+}
+
 /// The parameters of a channel.
 #[derive(Debug)]
 pub(crate) struct Channel {
@@ -606,7 +612,7 @@ pub(crate) struct Channel {
     /// Has the other side confirmed the channel?
     pub confirmed: bool,
     wants_reply: bool,
-    pending_data: std::collections::VecDeque<(CryptoVec, Option<u32>, usize)>,
+    pending_data: std::collections::VecDeque<PendingData>,
 }
 
 #[derive(Debug)]

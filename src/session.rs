@@ -15,7 +15,7 @@
 
 use crate::sshbuffer::SSHBuffer;
 use crate::{auth, cipher, kex, msg, negotiation};
-use crate::{Channel, ChannelId, Disconnect, Limits};
+use crate::{Channel, ChannelId, Disconnect, Limits, PendingData};
 use byteorder::{BigEndian, ByteOrder};
 use cryptovec::CryptoVec;
 use openssl::hash;
@@ -141,8 +141,14 @@ impl Encrypted {
     }
     */
 
-    pub fn eof(&mut self, channel: ChannelId) {
-        self.byte(channel, msg::CHANNEL_EOF);
+    pub fn eof(&mut self, channel_id: ChannelId) {
+        if let Some(ref mut channel) = self.channels.get_mut(&channel_id) {
+            if !channel.pending_data.is_empty() {
+                channel.pending_data.push_back(PendingData::Eof);
+            } else {
+                self.byte(channel_id, msg::CHANNEL_EOF);
+            }
+        }
     }
 
     pub fn sender_window_size(&self, channel: ChannelId) -> usize {
@@ -179,18 +185,34 @@ impl Encrypted {
         false
     }
 
-    pub fn flush_pending(&mut self, channel: ChannelId) -> usize {
+    pub fn flush_pending(&mut self, channel_id: ChannelId) -> usize {
         let mut pending_size = 0;
-        if let Some(channel) = self.channels.get_mut(&channel) {
-            while let Some((buf, a, size)) = channel.pending_data.pop_front() {
-                let (buf, size_) = Self::data_noqueue(&mut self.write, channel, buf, size);
-                pending_size += size_;
-                if size_ < buf.len() {
-                    channel.pending_data.push_front((buf, a, size_));
-                    break;
+        let mut pending_eof = false;
+        if let Some(channel) = self.channels.get_mut(&channel_id) {
+            loop {
+                match channel.pending_data.pop_front() {
+                    Some(PendingData::Data(buf, a, size)) => {
+                        let (buf, size_) = Self::data_noqueue(&mut self.write, channel, buf, size);
+                        pending_size += size_;
+                        if size_ < buf.len() {
+                            channel
+                                .pending_data
+                                .push_front(PendingData::Data(buf, a, size_));
+                            break;
+                        }
+                    }
+                    Some(PendingData::Eof) => {
+                        pending_eof = true;
+                    }
+                    None => break,
                 }
             }
         }
+
+        if pending_eof {
+            self.byte(channel_id, msg::CHANNEL_EOF);
+        }
+
         pending_size
     }
 
@@ -239,12 +261,16 @@ impl Encrypted {
         if let Some(channel) = self.channels.get_mut(&channel) {
             assert!(channel.confirmed);
             if !channel.pending_data.is_empty() {
-                channel.pending_data.push_back((buf0, None, 0));
+                channel
+                    .pending_data
+                    .push_back(PendingData::Data(buf0, None, 0));
                 return;
             }
             let (buf0, buf_len) = Self::data_noqueue(&mut self.write, channel, buf0, 0);
             if buf_len < buf0.len() {
-                channel.pending_data.push_back((buf0, None, buf_len))
+                channel
+                    .pending_data
+                    .push_back(PendingData::Data(buf0, None, buf_len))
             }
         }
     }
@@ -254,7 +280,9 @@ impl Encrypted {
         if let Some(channel) = self.channels.get_mut(&channel) {
             assert!(channel.confirmed);
             if !channel.pending_data.is_empty() {
-                channel.pending_data.push_back((buf0, Some(ext), 0));
+                channel
+                    .pending_data
+                    .push_back(PendingData::Data(buf0, Some(ext), 0));
                 return;
             }
             let mut buf = if buf0.len() as u32 > channel.recipient_window_size {
@@ -279,7 +307,9 @@ impl Encrypted {
             }
             debug!("buf.len() = {:?}, buf_len = {:?}", buf.len(), buf_len);
             if buf_len < buf0.len() {
-                channel.pending_data.push_back((buf0, Some(ext), buf_len))
+                channel
+                    .pending_data
+                    .push_back(PendingData::Data(buf0, Some(ext), buf_len))
             }
         }
     }
