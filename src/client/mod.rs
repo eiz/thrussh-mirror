@@ -650,7 +650,7 @@ impl Channel {
                     Some(OpenChannelMsg::Msg(ChannelMsg::WindowAdjusted { new_size })) => {
                         debug!("window adjusted: {:?}", new_size);
                         self.window_size = new_size;
-                        break;
+                        continue;
                     }
                     Some(OpenChannelMsg::Msg(msg)) => {
                         debug!("unexpected channel msg: {:?}", msg);
